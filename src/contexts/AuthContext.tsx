@@ -29,13 +29,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!error && data) {
       setProfile(data);
       
-      // 如果有待处理的邀请码，完成邀请码的使用
+      // Complete invitation code usage if there's a pending one
       if (data.pending_invitation_code) {
         try {
           await supabase.rpc('complete_invitation_code_usage', {
             user_id: userId
           });
-          // 重新加载配置以清除 pending_invitation_code
+          // Reload profile to clear pending_invitation_code
           const { data: updatedData } = await supabase
             .from('user_profiles')
             .select('*')
@@ -45,8 +45,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setProfile(updatedData);
           }
         } catch (err) {
-          console.error('完成邀请码使用失败:', err);
-          // 不抛出错误，因为用户已经成功登录了
+          console.error('Failed to complete invitation code usage:', err);
+          // Don't throw error since user is already logged in
         }
       }
     }
@@ -83,16 +83,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error('Supabase auth error:', error);
-      throw new Error(error.message || '登录失败');
+      throw new Error(error.message || 'Login failed');
     }
 
     if (!data.user) {
-      throw new Error('登录失败，请检查手机号和密码');
+      throw new Error('Login failed. Please check your phone number and password.');
     }
   };
 
   const signUp = async (phone: string, password: string, invitationCode: string) => {
-    // 1. 验证邀请码（作为匿名用户）
+    // 1. Verify invitation code (as anonymous user)
     const { data: codeData, error: codeError } = await supabase
       .from('invitation_codes')
       .select('*')
@@ -101,37 +101,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .maybeSingle();
 
     if (codeError) {
-      console.error('邀请码查询错误:', codeError);
-      throw new Error('邀请码查询失败');
+      console.error('Invitation code query error:', codeError);
+      throw new Error('Failed to verify invitation code');
     }
 
     if (!codeData) {
-      throw new Error('邀请码无效或已被使用');
+      throw new Error('Invitation code is invalid or has already been used');
     }
 
-    // 2. 创建用户账号（这会自动登录用户）
+    // 2. Create user account (this will automatically log in the user)
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: `${phone}@coffeeshop.local`,
       password,
     });
 
     if (authError) {
-      console.error('用户创建错误:', authError);
+      console.error('User creation error:', authError);
       throw authError;
     }
     
     if (!authData.user) {
-      throw new Error('用户创建失败');
+      throw new Error('Failed to create user account');
     }
 
-    // 确保会话已建立
+    // Ensure session is established
     if (!authData.session) {
-      throw new Error('用户会话创建失败');
+      throw new Error('Failed to create user session');
     }
 
     try {
-      // 3. 创建用户配置（将邀请码存储为待处理状态）
-      // 触发器会自动处理邀请码的更新
+      // 3. Create user profile (store invitation code as pending)
+      // Database trigger will automatically handle invitation code update
       const { error: profileError } = await supabase
         .from('user_profiles')
         .insert({
@@ -143,15 +143,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
 
       if (profileError) {
-        console.error('用户配置创建错误:', profileError);
-        throw new Error(`用户配置创建失败: ${profileError.message}`);
+        console.error('User profile creation error:', profileError);
+        throw new Error(`Failed to create user profile: ${profileError.message}`);
       }
 
-      // 注意：邀请码会在数据库触发器中自动更新
-      // 不再需要在这里手动更新邀请码
+      // Note: Invitation code will be automatically updated in database trigger
+      // No need to manually update invitation code here
     } catch (error) {
-      // 如果配置创建失败，抛出错误
-      console.error('注册后续操作错误:', error);
+      // Throw error if profile creation fails
+      console.error('Post-registration operation error:', error);
       throw error;
     }
   };

@@ -28,6 +28,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (!error && data) {
       setProfile(data);
+      
+      // 如果有待处理的邀请码，完成邀请码的使用
+      if (data.pending_invitation_code) {
+        try {
+          await supabase.rpc('complete_invitation_code_usage', {
+            user_id: userId
+          });
+          // 重新加载配置以清除 pending_invitation_code
+          const { data: updatedData } = await supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('id', userId)
+            .maybeSingle();
+          if (updatedData) {
+            setProfile(updatedData);
+          }
+        } catch (err) {
+          console.error('完成邀请码使用失败:', err);
+          // 不抛出错误，因为用户已经成功登录了
+        }
+      }
     }
   };
 
@@ -55,15 +76,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (phone: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: `${phone}@coffeeshop.local`,
       password,
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase auth error:', error);
+      throw new Error(error.message || '登录失败');
+    }
+
+    if (!data.user) {
+      throw new Error('登录失败，请检查手机号和密码');
+    }
   };
 
   const signUp = async (phone: string, password: string, invitationCode: string) => {
+    // 1. 验证邀请码（作为匿名用户）
     const { data: codeData, error: codeError } = await supabase
       .from('invitation_codes')
       .select('*')
@@ -71,39 +100,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq('is_used', false)
       .maybeSingle();
 
-    if (codeError || !codeData) {
-      throw new Error('Invalid or already used invitation code');
+    if (codeError) {
+      console.error('邀请码查询错误:', codeError);
+      throw new Error('邀请码查询失败');
     }
 
+    if (!codeData) {
+      throw new Error('邀请码无效或已被使用');
+    }
+
+    // 2. 创建用户账号（这会自动登录用户）
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: `${phone}@coffeeshop.local`,
       password,
     });
 
-    if (authError) throw authError;
-    if (!authData.user) throw new Error('Failed to create user');
+    if (authError) {
+      console.error('用户创建错误:', authError);
+      throw authError;
+    }
+    
+    if (!authData.user) {
+      throw new Error('用户创建失败');
+    }
 
-    const { error: profileError } = await supabase
-      .from('user_profiles')
-      .insert({
-        id: authData.user.id,
-        phone,
-        username: 'Coffee Lover',
-        is_admin: false,
-      });
+    // 确保会话已建立
+    if (!authData.session) {
+      throw new Error('用户会话创建失败');
+    }
 
-    if (profileError) throw profileError;
+    try {
+      // 3. 创建用户配置（将邀请码存储为待处理状态）
+      // 触发器会自动处理邀请码的更新
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .insert({
+          id: authData.user.id,
+          phone,
+          username: 'Coffee Lover',
+          is_admin: false,
+          pending_invitation_code: invitationCode,
+        });
 
-    const { error: updateCodeError } = await supabase
-      .from('invitation_codes')
-      .update({
-        used_by: authData.user.id,
-        is_used: true,
-        used_at: new Date().toISOString(),
-      })
-      .eq('id', codeData.id);
+      if (profileError) {
+        console.error('用户配置创建错误:', profileError);
+        throw new Error(`用户配置创建失败: ${profileError.message}`);
+      }
 
-    if (updateCodeError) throw updateCodeError;
+      // 注意：邀请码会在数据库触发器中自动更新
+      // 不再需要在这里手动更新邀请码
+    } catch (error) {
+      // 如果配置创建失败，抛出错误
+      console.error('注册后续操作错误:', error);
+      throw error;
+    }
   };
 
   const signOut = async () => {

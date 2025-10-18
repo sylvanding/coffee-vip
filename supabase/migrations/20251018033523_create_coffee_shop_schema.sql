@@ -15,6 +15,7 @@
   - `phone` (text, unique) - User's phone number
   - `username` (text) - Customizable display name
   - `is_admin` (boolean) - Whether user has admin privileges
+  - `pending_invitation_code` (text, nullable) - Invitation code pending verification
   - `created_at` (timestamptz) - Account creation timestamp
   - `updated_at` (timestamptz) - Last update timestamp
   
@@ -58,6 +59,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   phone text UNIQUE NOT NULL,
   username text DEFAULT 'Coffee Lover',
   is_admin boolean DEFAULT false,
+  pending_invitation_code text,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );

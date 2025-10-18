@@ -20,8 +20,10 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
 
     try {
       await signIn(phone, password);
-    } catch (err) {
-      setError('登录失败，请检查手机号和密码');
+    } catch (err: any) {
+      console.error('Login error:', err);
+      const errorMessage = err?.message || '登录失败，请检查手机号和密码';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

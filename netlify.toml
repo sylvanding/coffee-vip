@@ -1,6 +1,6 @@
 [build]
-  # 构建命令
-  command = "npm run build"
+  # 构建命令 - 先安装依赖再构建
+  command = "npm install --production=false && npm run build"
   # 构建输出目录
   publish = "dist"
 

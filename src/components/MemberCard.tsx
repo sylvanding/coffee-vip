@@ -14,6 +14,15 @@ export function MemberCard() {
   const firstScreenRef = useRef<HTMLDivElement>(null);
   const secondScreenRef = useRef<HTMLDivElement>(null);
 
+  // 手机号加密函数：保留前3位和后4位，中间用*替换
+  const maskPhone = (phone: string) => {
+    if (!phone || phone.length < 8) return phone;
+    const start = phone.slice(0, 3);
+    const end = phone.slice(-4);
+    const masked = '*'.repeat(phone.length - 7);
+    return `${start}${masked}${end}`;
+  };
+
   // 滚动效果
   useEffect(() => {
     const handleScroll = () => {
@@ -274,7 +283,7 @@ export function MemberCard() {
                   
                   {/* Phone number */}
                   <text className="numTxt" fill="#f0f0f0" fontSize="23" fontFamily="'Courier New', monospace" letterSpacing="2">
-                    {profile.phone}
+                    {maskPhone(profile.phone)}
                   </text>
                   
                   {/* Username */}
@@ -370,7 +379,7 @@ export function MemberCard() {
               <div>
                 <label className="text-sm text-gray-300 mb-3 block font-medium tracking-wide">Phone</label>
                 <div className="bg-white/10 rounded-xl px-5 py-3 border border-white/20">
-                  <p className="text-xl font-mono text-white tracking-wider">{profile.phone}</p>
+                  <p className="text-xl font-mono text-white tracking-wider">{maskPhone(profile.phone)}</p>
                 </div>
               </div>
             </div>
